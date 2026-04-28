@@ -1,0 +1,86 @@
+Détection et classification automatique de maladies des plantes 
+ 
+  
+I. Objectif 
+ 
+Concevoir un système intelligent capable de détecter et classifier des maladies sur les feuilles de 
+plantes à partir d’images. 
+Ce projet combine : 
+ Les techniques classiques de traitement d’image.  
+ L’extraction de caractéristiques.  
+ Les méthodes de Machine Learning et/ ou Deep Learning 
+ 
+L'objectif est de comparer les performances des modèle classique (Ml) et avancé (DL) pour la  
+classification des images.   
+ 
+II. Dataset à utiliser  
+  
+PlantVillage Dataset : disponible sur Kaggle 
+ 
+Contenu : 
+ ~54 000 images pour 38 classes de différentes plantes (tomate, pomme de terre, maïs…) feuilles  
+saines et malades 
+Travail individuel (travailler sur 4 classes)  
+Travail en binôme (8 classe minimum) 
+ 
+NB : Il est possible de travailler sur un autre dataset public, qu’il soit lié à la même 
+thématique ou à une autre. Le choix du dataset devra toutefois être validé par l’enseignant. 
+ 
+III. Architecture globale du projet 
+ 
+Pipeline recommandé :
+ 
+ 
+1. Prétraitement des images 
+ 
+Proposition:  
+ Redimensionner les images  
+ Convertir RGB → HSV ou grayscale 
+ Filtrage de l’image bruitée 
+
+
+ Analyser l’histogramme de quelque image  
+ Autres traitement seront aussi acceptés  
+Le rendu doit contenir une petite description du prétraitement effectué, son utilité et un 
+exemple pour visualiser son impact sur les images. 
+ 
+2. Segmentation ou extraction de contours 
+ 
+ Détecter les zones de texture anormale (Sobel,Canny Edge) 
+ Comparaison (subjective) des résultats obtenus 
+ Isoler la feuille du fond avec : 
+o Seuillage 
+o Segmentation couleur (HSV) 
+o Segmentation par clustering 
+ 
+3. Extraction de caractéristiques 
+ Calculer des « features »: 
+o Couleur (histogramme RGB, HSV) 
+o Texture GLCM (Gray Level Co-occurrence Matrix) 
+o Forme (surface, périmètre, circularité) 
+ 
+Ces caractéristiques serviront comme « vecteur d’entrée du modèle ML ». 
+4. Classification avec Machine Learning 
+ Diviser dataset (train/test) 
+ Construire un modèle de classification  
+ Entraîner le modèle 
+5. Evaluation de la classification 
+ Calculer accuracy, precision, recall. 
+6. Extension Deep Learning  
+ Comparer les résultats avec un modèle de profond (CNN from scratch ou pretrained) 
+ Etude comparative des résultats 
+IV. Extension possible (optionnel et noté) 
+ Un pipeline très moderne avec des méthodes avancé pour le pré traitement  ou la  
+segmentation (une comparaison entre les méthodes classique et deep est très 
+recommandé). 
+ Interface graphique  
+ Test temps réel  
+ Toutes autres propositions d’amélioration sont possibles 
+V. Livrables 
+1. Code documenté du Pipeline complet sous la forme d’un jupyter notebook. 
+2. Documentation de projet (rapport de maximum 10 pages ou une présentation de 15 slide 
+max) 
+VI. Modalité d’évaluation  
+Mini soutenance en présentiel (entre étudiant et enseignant) + discussion.  
+Pas de présentation Orale 
+ 

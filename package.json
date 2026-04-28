@@ -1,0 +1,15 @@
+{
+  "name": "projet_imagerie",
+  "version": "1.0.0",
+  "description": "Pipeline complet conforme au sujet:\r - Prétraitement\r - Segmentation / contours\r - Extraction de caractéristiques (couleur, texture GLCM, forme)\r - Classification Machine Learning\r - Évaluation\r - Extension Deep Learning (optionnelle)",
+  "main": "file.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "docx": "^9.6.1"
+  }
+}
