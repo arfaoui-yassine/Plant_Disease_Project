@@ -24,34 +24,16 @@ def train_evaluate_dl(
     # In TFDS 'plant_village' we only get 'train'. So we split it manually using keras helper if we wanted 
     # or just split the dataset. We'll do a simple take/skip split for validation.
     
-    # Check dataset size efficiently without loading into memory
-    dataset_size = tf.data.experimental.cardinality(tfds_dataset).numpy()
+    # 1. Limit dataset to 20,000 samples for speed/alignment
+    full_ds = tfds_dataset.unbatch().take(20000)
+    dataset_size = 20000
+    val_size = int(0.2 * dataset_size)
     
-    # If cardinality is unknown (common in some TF versions/datasets), count batches
-    if dataset_size < 0:
-        dataset_size = 0
-        for _ in tfds_dataset:
-            dataset_size += 1
-    
-    # Since tfds_dataset is already batched, dataset_size is the number of batches.
-    # Let's split by batches for simplicity.
-    val_batches = max(1, int(0.2 * dataset_size))
-    
-    # We unbatch to apply categorical mapping and then re-batch
-    # but it's better to stay batched if possible or re-batch efficiently.
     def to_categorical(image, label):
         return image, tf.one_hot(label, depth=len(class_names))
 
-    # Split batches
-    val_ds_raw = tfds_dataset.take(val_batches)
-    train_ds_raw = tfds_dataset.skip(val_batches)
-
-    train_ds = train_ds_raw.unbatch().map(to_categorical).batch(32)
-    val_ds = val_ds_raw.unbatch().map(to_categorical).batch(32)
-
-    autotune = tf.data.AUTOTUNE
-    train_ds = train_ds.prefetch(autotune)
-    val_ds = val_ds.prefetch(autotune)
+    val_ds = full_ds.take(val_size).map(to_categorical).batch(32).prefetch(tf.data.AUTOTUNE)
+    train_ds = full_ds.skip(val_size).map(to_categorical).batch(32).prefetch(tf.data.AUTOTUNE)
 
     base = tf.keras.applications.MobileNetV2(
         input_shape=(*image_size, 3),
@@ -59,7 +41,7 @@ def train_evaluate_dl(
         weights="imagenet",
     )
     base.trainable = False
-    base._name = "mobilenet_v2_base" # Explicitly name for Grad-CAM
+    base._name = "mobilenetv2_1.00_224"
 
     inp = tf.keras.layers.Input(shape=(*image_size, 3))
     x = tf.keras.applications.mobilenet_v2.preprocess_input(inp)
@@ -69,13 +51,15 @@ def train_evaluate_dl(
     out = tf.keras.layers.Dense(len(class_names), activation="softmax")(x)
     model = tf.keras.models.Model(inp, out)
 
+    print(f"\n🧠 Training on {dataset_size - val_size} samples...")
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-3),
         loss="categorical_crossentropy",
         metrics=["accuracy"],
     )
-
+    
     history = model.fit(train_ds, validation_data=val_ds, epochs=epochs, verbose=1)
+
     val_loss, val_acc = model.evaluate(val_ds, verbose=0)
 
     model.save(out_dir / "dl_model.keras")

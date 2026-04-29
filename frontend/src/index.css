@@ -7,9 +7,9 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a;
+  color-scheme: light;
+  color: #0f172a;
+  background-color: #f8fafc;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,22 +19,17 @@
 
 body {
   margin: 0;
-  display: flex;
-  place-content: center;
   min-width: 320px;
   min-height: 100vh;
-  overflow-x: hidden;
+  background-color: #f8fafc;
 }
 
-.glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+::selection {
+  background: #d1fae5;
+  color: #065f46;
 }
 
-.text-gradient {
-  background: linear-gradient(135deg, #34d399, #059669);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Custom transitions */
+.transition-all {
+  transition-duration: 400ms;
 }

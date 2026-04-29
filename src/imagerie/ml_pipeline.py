@@ -60,8 +60,12 @@ def build_feature_table(
         
         # Unbatch and process each image
         for img_float32, label_idx in zip(batch_images.numpy(), batch_labels.numpy()):
-            # Convert TFDS float32 [0, 1] -> uint8 BGR for OpenCV
-            img_uint8 = (img_float32 * 255.0).astype(np.uint8)
+            # Handle potential [0, 1] scaling from TFDS (though we just disabled it)
+            if img_float32.max() <= 1.01:
+                img_uint8 = (img_float32 * 255.0).astype(np.uint8)
+            else:
+                img_uint8 = img_float32.astype(np.uint8)
+            
             img_bgr = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2BGR)
 
             # Get class name
@@ -109,7 +113,7 @@ def train_evaluate_ml(X: np.ndarray, y: np.ndarray, out_dir: Path) -> dict:
 
     models = {
         "svm_rbf": Pipeline(
-            steps=[("scaler", StandardScaler()), ("clf", SVC(kernel="rbf", C=5, gamma="scale"))]
+            steps=[("scaler", StandardScaler()), ("clf", SVC(kernel="rbf", C=5, gamma="scale", probability=True))]
         ),
         "random_forest": RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1),
     }

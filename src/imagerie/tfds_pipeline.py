@@ -34,15 +34,9 @@ def load_tfds_pipeline(
         # Resize to desired dimensions
         image = tf.image.resize(image, image_size)
         
-        # Normalize pixel values to [0, 1]
-        image = image / 255.0
-        
-        # Cast to float32
+        # Cast to float32 (keep in 0-255 range for preprocess_input layer)
         image = tf.cast(image, tf.float32)
         
-        # Labels are already integer formatted by TFDS as_supervised=True
-        # One-hot encoding can be applied here if needed:
-        # label = tf.one_hot(label, depth=info.features['label'].num_classes)
         return image, label
 
     # 3. Optimize the data pipeline

@@ -5,38 +5,70 @@ import matplotlib.pyplot as plt
 
 def get_gradcam_heatmap(model, img_array, last_conv_layer_name, pred_index=None):
     """
-    Compute Grad-CAM heatmap for a given image and model.
+    Compute Grad-CAM heatmap for a given image and model, specifically handling nested base models.
     """
-    # Create a model that maps the input image to the activations
-    # of the last conv layer as well as the output predictions
-    grad_model = tf.keras.models.Model(
-        [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
+    # 1. Find the nested base model (MobileNetV2)
+    inner_model = None
+    for layer in model.layers:
+        if isinstance(layer, tf.keras.Model):
+            inner_model = layer
+            break
+            
+    if inner_model is None:
+        raise ValueError("Could not find nested inner model.")
+
+    # 2. The true last conv layer is inside the inner_model. 
+    # For MobileNetV2, it's typically "out_relu" or "Conv_1"
+    # We will look for "out_relu" explicitly if the passed name was the base model name.
+    if last_conv_layer_name in [inner_model.name, "mobilenet_v2_base"]:
+        last_conv_layer_name = "out_relu"
+
+    # 3. Create a model that maps the inner model's input to its last conv layer and its output
+    inner_grad_model = tf.keras.models.Model(
+        [inner_model.inputs], 
+        [inner_model.get_layer(last_conv_layer_name).output, inner_model.output]
     )
 
-    # Compute the gradient of the top predicted class (or specific class)
-    # for the input image with respect to the activations of the last conv layer
     with tf.GradientTape() as tape:
-        last_conv_layer_output, preds = grad_model(img_array)
+        # Pass input through any preprocessing layers before the inner model
+        x = img_array
+        for layer in model.layers:
+            if layer == inner_model:
+                break
+            if isinstance(layer, tf.keras.layers.InputLayer):
+                continue
+            x = layer(x)
+            
+        # Get conv features and base model output
+        last_conv_layer_output, base_outputs = inner_grad_model(x)
+        
+        # Pass base output through the classifier layers (pooling, dense, etc.)
+        x = base_outputs
+        past_inner = False
+        for layer in model.layers:
+            if past_inner:
+                x = layer(x)
+            if layer == inner_model:
+                past_inner = True
+                
+        preds = x
+        
         if pred_index is None:
             pred_index = tf.argmax(preds[0])
         class_channel = preds[:, pred_index]
 
-    # This is the gradient of the output neuron (top predicted or chosen)
-    # with regard to the output feature map of the last conv layer
+    # Compute gradients of the predicted class with respect to the feature map
     grads = tape.gradient(class_channel, last_conv_layer_output)
 
-    # This is a vector where each entry is the mean intensity of the gradient
-    # over a specific feature map channel
+    # Pool the gradients over all the axes leaving out the channel dimension
     pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
 
-    # We multiply each channel in the feature map array
-    # by "how important this channel is" with regard to the top predicted class
-    # then sum all the channels to obtain the heatmap class activation
+    # Weight the feature map by the pooled gradients
     last_conv_layer_output = last_conv_layer_output[0]
     heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
     heatmap = tf.squeeze(heatmap)
 
-    # For visualization purpose, we will also normalize the heatmap between 0 & 1
+    # Normalize heatmap
     heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
     return heatmap.numpy()
 

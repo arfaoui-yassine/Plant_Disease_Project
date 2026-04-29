@@ -12,10 +12,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plant disease detection/classification pipeline (TFDS)")
     parser.add_argument("--output", type=str, default="outputs", help="Output directory")
     parser.add_argument("--run-dl", action="store_true", help="Run optional deep learning extension")
-    parser.add_argument("--dl-epochs", type=int, default=8, help="Number of epochs for DL")
+    parser.add_argument("--dl-epochs", type=int, default=2, help="Number of epochs for DL")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size for TFDS")
-    # Kept max-per-class only for taking subset of TFDS if desired, else ignore
-    parser.add_argument("--max-samples", type=int, default=1000, help="Max images to take from TFDS for ML to avoid memory issues")
+    # Increased default for better accuracy
+    parser.add_argument("--max-samples", type=int, default=20000, help="Max images to take from TFDS for ML")
     return parser.parse_args()
 
 
