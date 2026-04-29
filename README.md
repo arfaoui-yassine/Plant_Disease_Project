@@ -1,116 +1,390 @@
-# 🌿 Plant Disease Detection & Classification System
+# 🌿 AgriVision Pro — AI Plant Disease Detection System
 
-Welcome to the **AgriVision** Plant Disease Detection System!
-
-This project implements an intelligent, automated pipeline for detecting and classifying plant diseases from pictures of leaves. It acts as an educational and functional bridge between two different philosophies of Artificial Intelligence:
-1. **Classical Machine Learning (ML)** (Handcrafted features, Support Vector Machines, Random Forests)
-2. **Deep Learning (DL)** (Convolutional Neural Networks via MobileNetV2)
-
-The system automatically downloads the massive **PlantVillage dataset** using **TensorFlow Datasets (TFDS)**, trains multiple AI models, and presents everything in an interactive **Streamlit Web Dashboard**. Additionally, it implements **Explainable AI (Grad-CAM)** so humans can physically *see* how the Deep Learning model makes its decisions.
+An end-to-end, production-ready pipeline for detecting and classifying plant diseases from leaf images. Combines **Deep Learning** (MobileNetV2), **Classical Machine Learning** (Random Forest / SVM), and **Explainable AI** (Grad-CAM) into a unified diagnostic platform with a premium Streamlit dashboard.
 
 ---
 
-## 1. 🏗️ How the Architecture Works in Detail
+## 📑 Table of Contents
 
-The code is strictly modularized into a production-ready Machine Learning Systems design.
+- [System Architecture](#-system-architecture)
+- [Project Structure](#-project-structure)
+- [Data Pipeline](#-data-pipeline)
+- [Model Architecture](#-model-architecture)
+- [Inference Pipeline](#-inference-pipeline)
+- [Explainable AI (Grad-CAM)](#-explainable-ai-grad-cam)
+- [Streamlit Dashboard](#-streamlit-dashboard)
+- [Getting Started](#-getting-started)
+- [CLI Tools](#-cli-tools)
+- [Results](#-results)
 
-Here is the exact data flow:
+---
 
-```text
-Raw Image Stream (from TFDS)
-        ↓
-Preprocessing (Resize, Denoise, Color Space Conversion) -> [src/imagerie/preprocessing.py]
-        ↓
-Segmentation (HSV Thresholding, Canny/Sobel Edges, KMeans) -> [src/imagerie/segmentation.py]
-        ↓
-Feature Extraction (Color Histograms, GLCM Textures) -> [src/imagerie/features.py]
-        ↓
-Classification (Classical ML or Deep Learning) -> [src/imagerie/ml_pipeline.py] & [src/imagerie/dl_pipeline.py]
-        ↓
-Explainable AI (Grad-CAM Heatmaps) -> [src/imagerie/xai.py]
-        ↓
-Frontend Web Dashboard -> [app.py]
+## 🏗️ System Architecture
+
+The system is composed of four major subsystems: **Data Ingestion**, **Training**, **Inference**, and **Visualization**. They interact as follows:
+
+```mermaid
+graph TB
+    subgraph DATA["📥 Data Layer"]
+        TFDS["TensorFlow Datasets<br/>(PlantVillage)"]
+        STREAM["tf.data Streaming Pipeline"]
+        TFDS --> STREAM
+    end
+
+    subgraph TRAIN["🧠 Training Layer"]
+        direction LR
+        ML_TRAIN["Classical ML Pipeline<br/>Feature Extraction → RF/SVM"]
+        DL_TRAIN["Deep Learning Pipeline<br/>MobileNetV2 Transfer Learning"]
+        TOM_TRAIN["Tomato Specialist<br/>MobileNetV2 (Filtered)"]
+    end
+
+    subgraph MODELS["💾 Saved Models"]
+        ML_MODEL["best_ml_model.joblib"]
+        DL_MODEL["dl_model.keras"]
+        TOM_MODEL["tomato_model.keras"]
+    end
+
+    subgraph INFERENCE["🔬 Inference Layer"]
+        APP["Streamlit Dashboard<br/>(app.py)"]
+        CLI["CLI Tools<br/>(test_inference.py)"]
+        GCAM["Grad-CAM XAI<br/>(xai.py)"]
+    end
+
+    STREAM --> ML_TRAIN
+    STREAM --> DL_TRAIN
+    STREAM --> TOM_TRAIN
+    ML_TRAIN --> ML_MODEL
+    DL_TRAIN --> DL_MODEL
+    TOM_TRAIN --> TOM_MODEL
+    ML_MODEL --> APP
+    DL_MODEL --> APP
+    TOM_MODEL --> APP
+    ML_MODEL --> CLI
+    DL_MODEL --> CLI
+    DL_MODEL --> GCAM
+    GCAM --> APP
+
+    style DATA fill:#0d1b2a,stroke:#64ffda,color:#ccd6f6
+    style TRAIN fill:#112240,stroke:#64ffda,color:#ccd6f6
+    style MODELS fill:#1a1a2e,stroke:#ffb74d,color:#ccd6f6
+    style INFERENCE fill:#0a192f,stroke:#64ffda,color:#ccd6f6
 ```
 
 ---
 
-## 2. 🧩 Detailed Code Breakdown
+## 📂 Project Structure
 
-### A. Data Ingestion (`src/imagerie/tfds_pipeline.py`)
-Previously, this project required manually downloading gigabytes of `.zip` files. Now, **`load_tfds_pipeline()`** connects directly to the cloud via **TensorFlow Datasets (`tfds.load("plant_village")`)**.
-* It downloads 54,303 images representing 38 different plant conditions.
-* It parses them into a highly optimized, dynamically-batched `tf.data.Dataset` binary stream (`.tfrecord`). 
-* *What it does:* Prevents your computer's RAM from crashing by streaming images in small batches during training.
-
-### B. Preprocessing & Segmentation (`src/imagerie/preprocessing.py` & `src/imagerie/segmentation.py`)
-Before classical algorithms can understand an image, it must be simplified.
-* **`preprocess_image()`**: Converts the standard RGB leaf image into Grayscale and HSV (Hue, Saturation, Value) color spaces while applying Gaussian blur to remove camera noise.
-* **`segment_leaf_hsv()`**: Uses HSV color thresholding to mathematically "cut" the green/yellow leaf away from the background.
-* **`detect_edges()`**: Runs Sobel and Canny algorithms to find the physical, harsh outlines of the diseased spots on the leaf.
-
-### C. Pattern Extraction (`src/imagerie/features.py`)
-Classical ML models only understand spreadsheets of numbers (tabular data). 
-* **`extract_feature_vector()`**: Converts the segmented leaf into a 1D array of numbers by calculating:
-  * **Texture (GLCM):** Measures how rough or smooth the leaf is (e.g., powdery mildew causes rough textures).
-  * **Color Histograms:** Measures exact ratios of green vs. brown vs. yellow pixels.
-
-### D. Model Training (`run_pipeline.py`, `src/imagerie/ml_pipeline.py`, & `src/imagerie/dl_pipeline.py`)
-This is the backend CLI script that orchestrates the training. 
-
-1. **Classical ML (`ml_pipeline.py`):** 
-   * Triggers **`train_evaluate_ml()`**.
-   * Feeds the extracted 1D feature arrays into a **Support Vector Machine (SVM)** and a **Random Forest**. 
-   * It evaluates which one is more accurate, generates a Confusion Matrix (`outputs/notebook_run/confusion_matrix_ml.png`), and saves the smartest algorithm to your disk as **`best_ml_model.joblib`**.
-
-2. **Deep Learning (`dl_pipeline.py`):**
-   * Triggers **`train_evaluate_dl()`**.
-   * It skips the manual edge/color extraction entirely. It passes the raw batch stream of 224x224 leaf images into **MobileNetV2** (a pre-trained Convolutional Neural Network).
-   * Over 8 epochs (passes of the dataset), the neural connections adapt to recognize the 38 diseases intrinsically. The "brain" is saved as **`outputs/notebook_run/dl/dl_model.keras`**.
-
-### E. Explainable AI (`src/imagerie/xai.py`)
-Neural networks are infamous "Black Boxes"—it is hard to know *why* they predicted a specific disease.
-* **`get_gradcam_heatmap()`**: Looks at the final computational layer of MobileNetV2 and calculates the mathematical gradients flowing back through the network. It outputs a color-coded "Heatmap". Red means the AI paid heavy attention to that exact pixel; Blue means it ignored it.
-
----
-
-## 3. 🖥️ How the UI acts and what it is doing right now (`app.py`)
-
-The Frontend is built entirely in Python using **Streamlit**. It acts as the bridge preventing users from needing to run terminal commands.
-
-When you run `streamlit run app.py`, the UI does the following:
-
-1. **Dynamic Loading (`load_dataset_info()`):** It automatically checks your `outputs/` folder cache. Instead of looking for local `.jpg` files, it pulls the exact disease class names that your ML model learned when it trained on the TFDS dataset.
-2. **Single Image Analysis Tab:** 
-   * You upload a picture of a leaf. 
-   * If you select **Classical ML**, it imports `preprocessing.py`, applies the HSV masks, generates the GLCM text features on the fly, and queries `best_ml_model.joblib` for a prediction.
-   * If you select **Deep Learning**, it reshapes your image to 224x224, queries `dl_model.keras`, and dynamically invokes `xai.py` to overlay the glowing Grad-CAM heatmap on top of your uploaded picture.
-3. **Dataset Explorer Tab:** Because TFDS abstracts away local images, the explorer now acts as a dynamic state lookup, listing the active classes the model is currently trained capable of diagnosing.
+```
+Upgraded_Plant_Disease_Project/
+│
+├── app.py                          # 🖥️  Streamlit dashboard (main UI)
+├── run_pipeline.py                 # 🚀 CLI orchestrator for full training
+├── train_tomato_model.py           # 🍅 Standalone tomato classifier trainer
+├── test_inference.py               # 🧪 CLI inference tester (all models)
+├── test_tomato_model.py            # 🧪 CLI tomato model tester
+├── AgriVision_Master_Pipeline.ipynb# 📓 Interactive Jupyter notebook
+├── requirements.txt                # 📦 Python dependencies
+│
+├── src/imagerie/                   # 🔧 Core processing modules
+│   ├── preprocessing.py            #    Image preprocessing (grayscale, HSV, blur)
+│   ├── segmentation.py             #    Leaf segmentation (HSV mask, edges, K-means)
+│   ├── features.py                 #    Feature extraction (histograms, texture)
+│   ├── tfds_pipeline.py            #    TFDS data loading & streaming
+│   ├── ml_pipeline.py              #    Classical ML training (RF, SVM)
+│   ├── dl_pipeline.py              #    Deep Learning training (MobileNetV2)
+│   ├── xai.py                      #    Grad-CAM explainability
+│   └── visualization.py            #    Plotting utilities
+│
+├── outputs/
+│   ├── notebook_run/               # Full model outputs
+│   │   ├── dl/dl_model.keras       #    Trained DL model (38 classes)
+│   │   ├── best_ml_model.joblib    #    Trained ML model + LabelEncoder
+│   │   ├── run_summary.json        #    Training metrics & class list
+│   │   └── confusion_matrix_ml.png #    ML confusion matrix
+│   │
+│   └── tomato_model/               # Tomato specialist outputs
+│       ├── tomato_model.keras       #    Trained tomato DL model (10 classes)
+│       ├── tomato_model_meta.json   #    Class names & config
+│       ├── training_history.png     #    Accuracy/loss curves
+│       ├── confusion_matrix.png     #    Confusion matrix heatmap
+│       ├── sample_predictions.png   #    Visual prediction samples
+│       └── classification_report.txt#    Precision/Recall/F1 report
+│
+└── venv/                           # Python virtual environment
+```
 
 ---
 
-## 4. 🚀 How to Run the Code
+## 🔄 Data Pipeline
 
-### Step 1: Install Dependencies
-Ensure you are using a Python virtual environment:
+All data is streamed from **TensorFlow Datasets (TFDS)** — no manual downloading required.
+
+```mermaid
+graph LR
+    A["TFDS PlantVillage<br/>54,303 images"] --> B["tf.data.Dataset<br/>(streaming)"]
+    B --> C{"Filter?"}
+    C -->|All classes| D["Full Dataset<br/>38 classes"]
+    C -->|Tomato only| E["Tomato Subset<br/>10 classes"]
+
+    D --> F["Resize to 224×224"]
+    E --> G["Resize to 128×128"]
+
+    F --> H["Cast to float32<br/>(keep 0–255 range)"]
+    G --> I["Normalize to 0–1"]
+
+    H --> J["Batch (32)<br/>Prefetch (AUTOTUNE)"]
+    I --> J
+
+    J --> K["Train/Val Split<br/>(80/20)"]
+
+    style A fill:#112240,stroke:#64ffda,color:#ccd6f6
+    style K fill:#112240,stroke:#64ffda,color:#ccd6f6
+```
+
+> **Important**: The Full DL model receives images in `[0, 255]` range because MobileNetV2's built-in `preprocess_input` handles the normalization internally. The Tomato model uses standard `[0, 1]` normalization.
+
+---
+
+## 🧠 Model Architecture
+
+### Model 1: Full DL — MobileNetV2 (38 Classes)
+
+```mermaid
+graph TD
+    INPUT["Input Layer<br/>(224 × 224 × 3)"] --> PREPROCESS["MobileNetV2<br/>preprocess_input<br/>(scales to [-1, 1])"]
+    PREPROCESS --> BASE["MobileNetV2 Base<br/>(ImageNet weights, frozen)<br/>Output: 7×7×1280"]
+    BASE --> GAP["GlobalAveragePooling2D<br/>Output: 1280"]
+    GAP --> DROP["Dropout (0.2)"]
+    DROP --> DENSE["Dense (38, softmax)"]
+    DENSE --> OUTPUT["Prediction<br/>(38 disease classes)"]
+
+    style INPUT fill:#0d1b2a,stroke:#64ffda,color:#e6f1ff
+    style BASE fill:#112240,stroke:#ffb74d,color:#e6f1ff
+    style OUTPUT fill:#0d1b2a,stroke:#64ffda,color:#64ffda
+```
+
+### Model 2: Tomato DL — MobileNetV2 (10 Classes)
+
+```mermaid
+graph TD
+    INPUT2["Input Layer<br/>(128 × 128 × 3)"] --> BASE2["MobileNetV2 Base<br/>(ImageNet weights, frozen)<br/>Output: 4×4×1280"]
+    BASE2 --> GAP2["GlobalAveragePooling2D<br/>Output: 1280"]
+    GAP2 --> DENSE2A["Dense (128, ReLU)"]
+    DENSE2A --> DROP2["Dropout (0.3)"]
+    DROP2 --> DENSE2B["Dense (10, softmax)"]
+    DENSE2B --> OUTPUT2["Prediction<br/>(10 tomato diseases)"]
+
+    style INPUT2 fill:#0d1b2a,stroke:#ef5350,color:#e6f1ff
+    style BASE2 fill:#112240,stroke:#ef5350,color:#e6f1ff
+    style OUTPUT2 fill:#0d1b2a,stroke:#ef5350,color:#ef5350
+```
+
+### Model 3: Classical ML Pipeline
+
+```mermaid
+graph LR
+    IMG["Leaf Image<br/>(any size)"] --> PRE["Preprocessing<br/>RGB → BGR → HSV<br/>Grayscale, Blur"]
+    PRE --> SEG["Segmentation<br/>HSV Mask<br/>(leaf isolation)"]
+    SEG --> FEAT["Feature Extraction<br/>• H/S Histograms (32d)<br/>• Area Ratio (1d)<br/>• Texture StdDev (1d)<br/>Total: 34 features"]
+    FEAT --> SCALE["StandardScaler"]
+    SCALE --> CLF{"Classifier"}
+    CLF --> RF["Random Forest<br/>(300 trees)"]
+    CLF --> SVM["SVM RBF<br/>(C=5, gamma=scale)"]
+    RF --> PRED["Prediction + Label"]
+    SVM --> PRED
+
+    style IMG fill:#0d1b2a,stroke:#ffb74d,color:#e6f1ff
+    style FEAT fill:#112240,stroke:#ffb74d,color:#e6f1ff
+    style PRED fill:#0d1b2a,stroke:#ffb74d,color:#ffb74d
+```
+
+---
+
+## 🔬 Inference Pipeline
+
+When a user uploads an image (via Streamlit or CLI), the system routes through the selected model:
+
+```mermaid
+flowchart TD
+    UPLOAD["📤 User Uploads Image"] --> SELECT{"Model Selection"}
+
+    SELECT -->|"🌿 Full DL"| DL_PATH["Resize 224×224<br/>preprocess_input()"]
+    SELECT -->|"🍅 Tomato DL"| TOM_PATH["Resize 128×128<br/>Normalize /255"]
+    SELECT -->|"🤖 Classical ML"| ML_PATH["BGR → HSV → Mask<br/>Extract 34 Features"]
+
+    DL_PATH --> DL_PRED["MobileNetV2 (38 cls)<br/>predict()"]
+    TOM_PATH --> TOM_PRED["MobileNetV2 (10 cls)<br/>predict()"]
+    ML_PATH --> ML_PRED["RF/SVM<br/>predict()"]
+
+    DL_PRED --> TOP3["Top-3 Predictions<br/>+ Confidence %"]
+    TOM_PRED --> TOP3
+    ML_PRED --> ML_OUT["Prediction<br/>+ Confidence %"]
+
+    TOP3 --> DISPLAY["🖥️ Dashboard Display<br/>• Disease name<br/>• Confidence bar<br/>• Grad-CAM heatmap<br/>• Preprocessing views"]
+    ML_OUT --> DISPLAY
+
+    style UPLOAD fill:#0d1b2a,stroke:#64ffda,color:#e6f1ff
+    style DISPLAY fill:#112240,stroke:#64ffda,color:#64ffda
+```
+
+---
+
+## 🔥 Explainable AI (Grad-CAM)
+
+Grad-CAM (Gradient-weighted Class Activation Mapping) reveals **where** the model is looking when making a diagnosis. This builds trust by showing the neural network's reasoning.
+
+```mermaid
+graph TD
+    INPUT["Input Image"] --> FWD["Forward Pass<br/>through MobileNetV2"]
+    FWD --> CONV["Last Conv Layer<br/>(out_relu)<br/>7×7×1280 feature maps"]
+    FWD --> PRED["Predicted Class<br/>(e.g., Bacterial Spot)"]
+
+    PRED --> GRAD["Backprop Gradients<br/>∂prediction / ∂feature_maps"]
+    GRAD --> POOL["Global Average Pool<br/>gradients → weights"]
+    POOL --> WEIGHT["Weighted Sum<br/>weights × feature maps"]
+    WEIGHT --> HEAT["ReLU + Normalize<br/>→ Heatmap (0–1)"]
+    HEAT --> OVERLAY["Superimpose on<br/>Original Image"]
+    CONV --> WEIGHT
+
+    OVERLAY --> RESULT["🔥 Grad-CAM Output<br/>Red = High Attention<br/>Blue = Low Attention"]
+
+    style INPUT fill:#0d1b2a,stroke:#64ffda,color:#e6f1ff
+    style RESULT fill:#112240,stroke:#ef5350,color:#ef5350
+```
+
+**How it handles nested models**: The system automatically unwraps the MobileNetV2 base from inside the classifier wrapper, hooks into the `out_relu` layer for gradient computation, and reconstructs the forward pass through the remaining classification head layers.
+
+---
+
+## 🖥️ Streamlit Dashboard
+
+The dashboard provides 4 pages accessible via the sidebar:
+
+```mermaid
+graph TD
+    SIDEBAR["🔧 Sidebar<br/>• Navigation<br/>• Model Selector<br/>• System Status"] --> HOME["🏠 Home<br/>Metric cards, architecture overview"]
+    SIDEBAR --> DIAG["🔬 Diagnose<br/>Upload → Predict → Visualize"]
+    SIDEBAR --> PERF["📊 Performance<br/>Side-by-side model comparison"]
+    SIDEBAR --> TOMATO["🍅 Tomato Insights<br/>Training curves, confusion matrix"]
+
+    DIAG --> M1["🌿 Full DL (38 cls)"]
+    DIAG --> M2["🍅 Tomato DL (10 cls)"]
+    DIAG --> M3["🤖 Classical ML (RF/SVM)"]
+
+    M1 --> RES["Results Display<br/>• Prediction + confidence<br/>• Top-3 alternatives<br/>• Grad-CAM tab<br/>• Preprocessing tab"]
+    M2 --> RES
+    M3 --> RES
+
+    style SIDEBAR fill:#0a192f,stroke:#64ffda,color:#ccd6f6
+    style DIAG fill:#112240,stroke:#64ffda,color:#ccd6f6
+    style RES fill:#1a1a2e,stroke:#64ffda,color:#64ffda
+```
+
+### Model Selector
+
+| Selection | Model File | Input Size | Normalization | Classes |
+|-----------|-----------|:----------:|:-------------:|:-------:|
+| 🌿 Full DL | `dl_model.keras` | 224×224 | `preprocess_input` ([-1,1]) | 38 |
+| 🍅 Tomato DL | `tomato_model.keras` | 128×128 | `/255.0` ([0,1]) | 10 |
+| 🤖 Classical ML | `best_ml_model.joblib` | Any | N/A (feature-based) | 38 |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Setup Environment
+
 ```bash
+python -m venv venv
+.\venv\Scripts\activate        # Windows
 pip install -r requirements.txt
-pip install tensorflow-datasets importlib_resources protobuf==6.31.1 scikit-image
 ```
 
-### Step 2: Train the Models (Backend)
-Run the pipeline generation script. *(Note: On the first run, TensorFlow Datasets will take ~10 minutes to download and compile the 54,000 images from the internet into a local database. Subsequent runs take 2 seconds).*
+### 2. Train Models
 
 ```bash
-python run_pipeline.py --max-samples 1000 --output outputs/notebook_run --run-dl --dl-epochs 8
-```
-*(This will train the ML models on 1,000 samples to save RAM, and train the Deep Learning model on the full TFDS stream).*
+# Train full pipeline (ML + DL, 38 classes)
+python run_pipeline.py --run-dl --max-samples 20000 --dl-epochs 5
 
-### Step 3: Launch the Dashboard (Frontend)
-Once training finishes and the models are saved to your `outputs/` folder, start the interactive web UI:
+# Train tomato specialist (10 classes)
+python train_tomato_model.py --epochs 5
+```
+
+### 3. Launch Dashboard
 
 ```bash
 streamlit run app.py
 ```
-Open the provided `localhost` URL in your web browser to upload images and test the models!
 
-*(Alternatively, you can interact with the python steps identically cell-by-cell inside `notebooks/plant_disease_pipeline.ipynb`)*.
+---
+
+## 🧪 CLI Tools
+
+### Test All Models on an Image
+
+```bash
+python test_inference.py "path/to/leaf.jpg"
+# Shows Top-3 DL predictions + ML prediction
+
+python test_inference.py "path/to/leaf.jpg" --gradcam
+# Also saves dl_attention_result.png
+```
+
+### Test Tomato Model Only
+
+```bash
+python test_tomato_model.py "path/to/tomato_leaf.jpg"
+# Shows Top-3 tomato disease predictions
+```
+
+---
+
+## 📊 Results
+
+### Tomato Specialist Model (10 classes)
+
+| Metric | Score |
+|--------|:-----:|
+| **Validation Accuracy** | **95%** |
+| Weighted Precision | 0.95 |
+| Weighted Recall | 0.95 |
+| Weighted F1 | 0.95 |
+
+**Per-class highlights:**
+
+| Disease | Precision | Recall | F1 |
+|---------|:---------:|:------:|:--:|
+| Bacterial Spot | 0.98 | 0.96 | 0.97 |
+| Yellow Leaf Curl Virus | 0.99 | 1.00 | 0.99 |
+| Tomato Mosaic Virus | 0.97 | 0.97 | 0.97 |
+| Healthy | 0.97 | 0.97 | 0.97 |
+| Late Blight | 0.90 | 0.97 | 0.94 |
+
+### Classical ML Model (38 classes)
+
+| Model | Accuracy | F1 |
+|-------|:--------:|:--:|
+| Random Forest (300 trees) | 73% | 0.70 |
+| SVM (RBF, C=5) | 72.5% | 0.71 |
+
+---
+
+## 📦 Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `tensorflow` | DL training, MobileNetV2, TFDS |
+| `tensorflow-datasets` | PlantVillage data streaming |
+| `scikit-learn` | RF, SVM, metrics, preprocessing |
+| `opencv-python` | Image processing, segmentation |
+| `streamlit` | Interactive web dashboard |
+| `joblib` | Model serialization (ML) |
+| `matplotlib` | Plotting, Grad-CAM colormap |
+| `pandas` | Data manipulation |
+| `tqdm` | Progress bars |
+
+---
+
+## 📜 License
+
+This project is developed as part of an academic engineering curriculum for plant disease image processing and classification.
