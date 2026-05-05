@@ -1,9 +1,11 @@
 import io
+import json
 import base64
 import cv2
 import numpy as np
 import joblib
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -29,7 +31,12 @@ app.add_middleware(
 OUT_DIR = Path("outputs/notebook_run")
 models = {"ml": None, "dl": None}
 
+# TFDS class names (the true label order used during DL training)
+# These are loaded once at startup and cached
+tfds_class_names: list[str] = []
+
 def load_models():
+    global tfds_class_names
     try:
         ml_path = OUT_DIR / "best_ml_model.joblib"
         if ml_path.exists():
@@ -40,6 +47,19 @@ def load_models():
         if dl_path.exists():
             models["dl"] = tf.keras.models.load_model(dl_path)
             print("DL Model loaded")
+        
+        # Load the TFDS class names in the correct order
+        # This is the order the DL model was trained with
+        try:
+            _, ds_info = tfds.load("plant_village", split="train[:1%]", with_info=True)
+            tfds_class_names = ds_info.features['label'].names
+            print(f"TFDS class names loaded: {len(tfds_class_names)} classes")
+        except Exception as e:
+            print(f"Could not load TFDS info, falling back to run_summary.json: {e}")
+            summary_path = OUT_DIR / "run_summary.json"
+            if summary_path.exists():
+                summary = json.loads(summary_path.read_text())
+                tfds_class_names = summary.get("selected_classes", [])
     except Exception as e:
         print(f"Error loading models: {e}")
 
@@ -117,22 +137,21 @@ async def analyze(file: UploadFile = File(...)):
     if models["dl"]:
         img_resized = cv2.resize(img_bgr, (224, 224))
         img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-        img_array = np.expand_dims(img_rgb, axis=0)
-        img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
+        img_array = np.expand_dims(img_rgb.astype(np.float32), axis=0)
+        # DO NOT apply preprocess_input here — it's already inside the model graph
         
         predictions = models["dl"].predict(img_array, verbose=0)
         pred_idx = np.argmax(predictions[0])
         pred_confidence = float(predictions[0][pred_idx])
         
-        # Get class names from metadata
-        info = await get_info()
-        class_names = info["classes"]
-        pred_label = class_names[pred_idx] if pred_idx < len(class_names) else "Unknown"
+        # Use TFDS class names (correct order matching training labels)
+        dl_classes = tfds_class_names if tfds_class_names else []
+        pred_label = dl_classes[pred_idx] if pred_idx < len(dl_classes) else "Unknown"
         
         # Grad-CAM
         gradcam_b64 = None
         try:
-            heatmap = get_gradcam_heatmap(models["dl"], img_array, "mobilenet_v2_base", pred_index=pred_idx)
+            heatmap = get_gradcam_heatmap(models["dl"], img_array, "mobilenetv2_1.00_224", pred_index=pred_idx)
             superimposed = display_gradcam(img_rgb, heatmap, alpha=0.5)
             gradcam_b64 = image_to_base64(cv2.cvtColor(superimposed, cv2.COLOR_RGB2BGR))
         except Exception as e:
@@ -141,7 +160,7 @@ async def analyze(file: UploadFile = File(...)):
         dl_result = {
             "prediction": pred_label,
             "confidence": pred_confidence,
-            "probabilities": {name: float(prob) for name, prob in zip(class_names, predictions[0])},
+            "probabilities": {name: float(prob) for name, prob in zip(dl_classes, predictions[0])},
             "gradcam": gradcam_b64
         }
 

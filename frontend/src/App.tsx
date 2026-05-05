@@ -37,7 +37,10 @@ const App = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await axios.post('http://localhost:8000/api/analyze', formData);
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const response = await axios.post(`${apiBase}/api/analyze`, formData, {
+        headers: { 'ngrok-skip-browser-warning': 'true' },
+      });
       setResults(response.data);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Connection failed.");
